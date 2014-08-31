@@ -21,9 +21,11 @@ import java.awt.Graphics2D;
 import java.awt.Toolkit;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
+import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.awt.image.WritableRaster;
 import java.awt.print.PageFormat;
+import java.awt.print.Paper;
 import java.awt.print.Printable;
 import java.awt.print.PrinterException;
 import java.awt.print.PrinterJob;
@@ -31,6 +33,7 @@ import java.io.File;
 import java.io.IOException;
 
 import javax.imageio.ImageIO;
+import javax.print.PrintException;
 import javax.swing.JFrame;
 
 import com.googlecode.javacv.CanvasFrame;
@@ -53,7 +56,7 @@ public class Main implements KeyListener, Printable {
 	float size = 2.f;
 	PosterizeFilter pf = new PosterizeFilter();
 	static int randmust = 100;
-	int maxwidth = 400;
+	int maxwidth = 187;
 	CanvasFrame cf = new CanvasFrame("Caricature");
 	CanvasFrame cf1 = new CanvasFrame("Caricature1");
 	CanvasFrame cf2 = new CanvasFrame("Caricature2");
@@ -62,7 +65,7 @@ public class Main implements KeyListener, Printable {
 	static boolean mustacheOn = true;
 	int posterizelevels = 5;
 	private BufferedImage saveImage;
-	PrinterJob job = PrinterJob.getPrinterJob();
+//	PrinterJob job = PrinterJob.getPrinterJob();
 
 	public Main() throws Exception {
 		new Thread(new Runnable() {
@@ -78,9 +81,22 @@ public class Main implements KeyListener, Printable {
 	}
 
 	public void start() throws Exception {
-
-		job.setPrintable(this);
-		 job.printDialog();
+//		PageFormat format = new PageFormat();
+//		Paper paper = new Paper();
+//
+//		double paperWidth = 2.25;// 3.25
+//		double paperHeight = 2.25;// 11.69
+//		double leftMargin = 0.12;
+//		double rightMargin = 0.10;
+//		double topMargin = 0;
+//		double bottomMargin = 0.01;
+//		paper.setSize(paperWidth * 72, paperHeight * 72);
+//		paper.setImageableArea(leftMargin * 72, topMargin * 72, (paperWidth - leftMargin - rightMargin) * 72, (paperHeight - topMargin - bottomMargin) * 72);
+//
+//		format.setPaper(paper);
+//		format.setOrientation(PageFormat.LANDSCAPE);
+//		job.setPrintable(this,format);
+//		job.printDialog();
 		// KeyboardFocusManager manager =
 		// KeyboardFocusManager.getCurrentKeyboardFocusManager();
 		// manager.addKeyEventDispatcher(new MyDispatcher());
@@ -104,7 +120,7 @@ public class Main implements KeyListener, Printable {
 		grabber.setImageWidth(1600);
 		grabber.setImageHeight(1200);
 		// grabber.setImageWidth(1280);
-		// grabber.setImageHeight(720);
+		// grabber.setImageHeight(1024);
 		grabber.start();
 
 		cf.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -216,7 +232,7 @@ public class Main implements KeyListener, Printable {
 			// e.printStackTrace();
 			// }
 			int newheight = (int) ((maxwidth / (double) copy.width()) * copy.height());
-			copy = IplImage.createFrom(resizeImage(AutoCorrectionFilter.filter(copy.getBufferedImage()), 400, newheight));
+			copy = IplImage.createFrom(resizeImage(AutoCorrectionFilter.filter(copy.getBufferedImage()), maxwidth, newheight));
 			IplImage gray = IplImage.create(copy.cvSize(), IPL_DEPTH_8U, 1);
 			cvCvtColor(copy, gray, CV_BGR2GRAY);
 			gray = render(gray, pf);
@@ -404,18 +420,20 @@ public class Main implements KeyListener, Printable {
 		if (e.getKeyCode() == KeyEvent.VK_F11) {
 			Toolkit.getDefaultToolkit().beep();
 			try {
-				// System.out.println(saveImage);
+				System.out.println("pressed");
 				ImageIO.write(saveImage, "png", new File("./images/pic" + System.currentTimeMillis() + ".png"));
-				job.print();
-				// ImageIO.write(fullImage, "png", new File("./images/full" +
-				// System.currentTimeMillis() + ".png"));
+				try {
+					Printer.print(saveImage);
+				} catch (PrintException e1) {
+					e1.printStackTrace();
+				}
+				
 			} catch (IOException e1) {
-				e1.printStackTrace();
-			} catch (PrinterException e1) {
 				e1.printStackTrace();
 			}
 		}
 	}
+
 
 	@Override
 	public void keyReleased(KeyEvent paramKeyEvent) {
@@ -427,10 +445,22 @@ public class Main implements KeyListener, Printable {
 		if (page > 0) {
 			return NO_SUCH_PAGE;
 		}
+
+//		 paramPageFormat.setOrientation(PageFormat.LANDSCAPE);
+//		 Paper pPaper = paramPageFormat.getPaper();
+//		 pPaper.setSize(164.592,164.592);
+//		 pPaper.setImageableArea(10, 10, pPaper.getWidth()-20, pPaper.getHeight()-20);
+//		 paramPageFormat.setPaper(pPaper);
+		// System.out.println(pPaper.getWidth()+","+pPaper.getHeight());
+		// System.out.println(pPaper.getImageableWidth()+","+pPaper.getImageableHeight());
+		// System.out.println(pPaper.getImageableX()+","+pPaper.getImageableY());
+		// System.out.println(saveImage.getWidth()+","+saveImage.getHeight());
+		//
 		Graphics2D g2d = (Graphics2D) paramGraphics;
+		AffineTransform pOrigTransform = g2d.getTransform();
 		g2d.translate(paramPageFormat.getImageableX(), paramPageFormat.getImageableY());
 		g2d.drawImage(saveImage, 0, 0, null);
-
+		g2d.setTransform(pOrigTransform);
 		return PAGE_EXISTS;
 	}
 
