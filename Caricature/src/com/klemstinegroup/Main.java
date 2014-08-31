@@ -56,7 +56,7 @@ public class Main implements KeyListener, Printable {
 	float size = 2.f;
 	PosterizeFilter pf = new PosterizeFilter();
 	static int randmust = 100;
-	int maxwidth = 187;
+	
 	CanvasFrame cf = new CanvasFrame("Caricature");
 	CanvasFrame cf1 = new CanvasFrame("Caricature1");
 	CanvasFrame cf2 = new CanvasFrame("Caricature2");
@@ -66,7 +66,9 @@ public class Main implements KeyListener, Printable {
 	int posterizelevels = 5;
 	private BufferedImage saveImage;
 //	PrinterJob job = PrinterJob.getPrinterJob();
-
+	private boolean printsmall=true;
+	int maxwidth = printsmall?187:384;   //187,384
+	
 	public Main() throws Exception {
 		new Thread(new Runnable() {
 			public void run() {
@@ -423,7 +425,12 @@ public class Main implements KeyListener, Printable {
 				System.out.println("pressed");
 				ImageIO.write(saveImage, "png", new File("./images/pic" + System.currentTimeMillis() + ".png"));
 				try {
+					if (printsmall)
 					Printer.print(saveImage);
+					
+					else {PrinterTest.print(saveImage);
+					PrinterTest.printMakerspace();} 
+					
 				} catch (PrintException e1) {
 					e1.printStackTrace();
 				}
