@@ -53,9 +53,10 @@ public class Main implements KeyListener, Printable {
 	public static final String NOSE_XML_FILE = "nose.xml";
 	public static int stretchX = 40;
 	public static int stretchY = 80;
-	float size = 2.f;
+	float size = 3.f;
 	PosterizeFilter pf = new PosterizeFilter();
 	static int randmust = 100;
+
 	
 	CanvasFrame cf = new CanvasFrame("Caricature");
 	CanvasFrame cf1 = new CanvasFrame("Caricature1");
@@ -65,8 +66,9 @@ public class Main implements KeyListener, Printable {
 	static boolean mustacheOn = true;
 	int posterizelevels = 5;
 	private BufferedImage saveImage;
-//	PrinterJob job = PrinterJob.getPrinterJob();
-	private boolean printsmall=true;
+//
+	PrinterJob job = PrinterJob.getPrinterJob();
+	private boolean printsmall=false;
 	int maxwidth = printsmall?187:384;   //187,384
 	
 	public Main() throws Exception {
@@ -102,7 +104,8 @@ public class Main implements KeyListener, Printable {
 		// KeyboardFocusManager manager =
 		// KeyboardFocusManager.getCurrentKeyboardFocusManager();
 		// manager.addKeyEventDispatcher(new MyDispatcher());
-		cf.getCanvas().addKeyListener(this);
+	
+	cf.getCanvas().addKeyListener(this);
 		cf1.getCanvas().addKeyListener(this);
 		cf2.getCanvas().addKeyListener(this);
 		cf.getCanvas().setFocusable(true);
@@ -120,16 +123,18 @@ public class Main implements KeyListener, Printable {
 		}
 		OpenCVFrameGrabber grabber = new OpenCVFrameGrabber(0);
 		grabber.setImageWidth(1600);
-		grabber.setImageHeight(1200);
-		// grabber.setImageWidth(1280);
-		// grabber.setImageHeight(1024);
+	
+	grabber.setImageHeight(1200);
+//		 grabber.setImageWidth(1280);
+//		 grabber.setImageHeight(1024);
 		grabber.start();
 
 		cf.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		cf1.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		cf2.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		IplImage image = grabber.grab();
-		CvHaarClassifierCascade face_cascade = new CvHaarClassifierCascade(cvLoad(FACE_XML_FILE));
+	
+	CvHaarClassifierCascade face_cascade = new CvHaarClassifierCascade(cvLoad(FACE_XML_FILE));
 		CvHaarClassifierCascade nose_cascade = new CvHaarClassifierCascade(cvLoad(NOSE_XML_FILE));
 		CvRect r = new CvRect(image.width() / 2 - 200, image.height() / 2 - 200, 400, 400);
 		while (cf.isVisible()) {
@@ -151,7 +156,8 @@ public class Main implements KeyListener, Printable {
 				cvResetImageROI(image);
 				CvMemStorage storage1 = CvMemStorage.create();
 				CvSeq sign1 = cvHaarDetectObjects(face, nose_cascade, storage1, 1.15, 3, com.googlecode.javacv.cpp.opencv_objdetect.CV_HAAR_SCALE_IMAGE | com.googlecode.javacv.cpp.opencv_objdetect.CV_HAAR_DO_CANNY_PRUNING | com.googlecode.javacv.cpp.opencv_objdetect.CV_HAAR_FIND_BIGGEST_OBJECT);
-				face.release();
+			
+	face.release();
 				int total_mouth = sign1.total();
 				if (total_mouth > 0) {
 					CvRect r3 = new CvRect(cvGetSeqElem(sign1, 0));
@@ -166,10 +172,11 @@ public class Main implements KeyListener, Printable {
 
 					x1 = (int) ((float) r3.width() * size);
 					y1 = r3.height();
-					x2 = r3.x() + r2.x() - ((int) ((float) r3.width() / 2f)) + 5;
+					x2 = r3.x() + r2.x() - ((int) ((float) r3.width() /1f)) + 5;
 					y2 = r3.y() + r2.y() + r3.height() / 2 + 5;
 					mustdetect = true;
-				}
+			
+	}
 
 				cvClearMemStorage(storage1);
 
@@ -179,7 +186,8 @@ public class Main implements KeyListener, Printable {
 					// cvPoint(r1.width() + r1.x(), r1.height() + r1.y()),
 					// CvScalar.BLUE, 2, CV_AA, 0);
 
-					r2.x(Math.min(r2.x(), r1.x()));
+				
+	r2.x(Math.min(r2.x(), r1.x()));
 					r2.y(Math.min(r2.y(), r1.y()));
 					if (r1.x() + r1.width() > maxw)
 						maxw = r1.x() + r1.width();
@@ -193,15 +201,23 @@ public class Main implements KeyListener, Printable {
 				r.y(r.y() + (r2.y() - 2 * stretchY - r.y()) / 5);
 				r.width(r.width() + (r2.width() + 2 * stretchX - r.width()) / 5);
 				r.height(r.height() + (r2.height() + 3 * stretchY - r.height()) / 5);
-				if (r.x() < 0)
-					r.x(0);
-				if (r.y() < 0)
-					r.y(0);
-				if (r.width() > image.width())
-					r.width(image.width());
-				if (r.height() > image.height())
-					r.height(image.height());
+			
 			}
+			else{
+				r.x(r.x()-5);
+				r.y(r.y()-5);
+				r.width(r.width()+10);
+				r.height(r.height()+10);
+			}
+			if (r.x() < 0)
+				r.x(0);
+			if (r.y() < 0)
+				r.y(0);
+			if (r.width() > image.width())
+				r.width(image.width());
+			if (r.height() > image.height())
+				r.height(image.height());
+			
 			cvClearMemStorage(storage);
 
 			cvSetImageROI(image, r);
@@ -244,6 +260,7 @@ public class Main implements KeyListener, Printable {
 
 			// cvThreshold(gray, gray, EDGES_THRESHOLD, 255, CV_THRESH_BINARY);
 			saveImage = floydSteinbergDithering(gray.getBufferedImage());
+
 			cf.showImage(saveImage);
 			copy.release();
 			gray.release();
@@ -292,7 +309,8 @@ public class Main implements KeyListener, Printable {
 	}
 
 	public static IplImage render(IplImage image, AbstractBufferedImageOp rf) {
-		BufferedImage bi = new BufferedImage(image.width(), image.height(), BufferedImage.TYPE_INT_ARGB);
+	
+	BufferedImage bi = new BufferedImage(image.width(), image.height(), BufferedImage.TYPE_INT_ARGB);
 		BufferedImage bi2 = new BufferedImage(image.width(), image.height(), BufferedImage.TYPE_INT_ARGB);
 		bi.getGraphics().drawImage(image.getBufferedImage(), 0, 0, null);
 		rf.filter(bi, bi2);
@@ -401,7 +419,8 @@ public class Main implements KeyListener, Printable {
 			return toColor().getRGB();
 		}
 
-		public Color toColor() {
+	
+	public Color toColor() {
 			return new Color(clamp(r), clamp(g), clamp(b));
 		}
 
@@ -422,7 +441,8 @@ public class Main implements KeyListener, Printable {
 		if (e.getKeyCode() == KeyEvent.VK_F11) {
 			Toolkit.getDefaultToolkit().beep();
 			try {
-				System.out.println("pressed");
+			
+	System.out.println("pressed");
 				ImageIO.write(saveImage, "png", new File("./images/pic" + System.currentTimeMillis() + ".png"));
 				try {
 					if (printsmall)
@@ -431,7 +451,8 @@ public class Main implements KeyListener, Printable {
 					else {PrinterTest.print(saveImage);
 					PrinterTest.printMakerspace();} 
 					
-				} catch (PrintException e1) {
+			
+	} catch (PrintException e1) {
 					e1.printStackTrace();
 				}
 				
