@@ -48,7 +48,7 @@ import com.googlecode.javacv.cpp.opencv_objdetect.CvHaarClassifierCascade;
 import com.jhlabs.image.AbstractBufferedImageOp;
 import com.jhlabs.image.PosterizeFilter;
 
-public class Main implements KeyListener, Printable {
+public class MainTSP implements KeyListener, Printable {
 	public static final String FACE_XML_FILE = "haarcascade_frontalface_alt.xml";
 	public static final String NOSE_XML_FILE = "nose.xml";
 	public static int stretchX = 40;
@@ -70,7 +70,7 @@ public class Main implements KeyListener, Printable {
 	private boolean printsmall = true;
 	int maxwidth = printsmall ? 187 : 384; // 187,384
 
-	public Main() throws Exception {
+	public MainTSP() throws Exception {
 		new Thread(new Runnable() {
 			public void run() {
 				try {
@@ -257,8 +257,8 @@ public class Main implements KeyListener, Printable {
 			cf2.showImage(image);
 
 			// cvThreshold(gray, gray, EDGES_THRESHOLD, 255, CV_THRESH_BINARY);
-			saveImage = floydSteinbergDithering(gray.getBufferedImage());
-
+//			saveImage = floydSteinbergDithering(gray.getBufferedImage());
+			saveImage = gray.getBufferedImage();
 			cf.showImage(saveImage);
 			copy.release();
 			gray.release();
@@ -293,7 +293,7 @@ public class Main implements KeyListener, Printable {
 	}
 
 	public static void main(String[] args) throws Exception {
-		new Main();
+		new MainTSP();
 	}
 
 	public static IplImage copy(IplImage image) {
@@ -434,23 +434,29 @@ public class Main implements KeyListener, Printable {
 	@Override
 	public void keyPressed(KeyEvent e) {
 		if (e.getKeyCode() == KeyEvent.VK_M)
-			Main.mustacheOn = !Main.mustacheOn;
+			MainTSP.mustacheOn = !MainTSP.mustacheOn;
 		if (e.getKeyCode() == KeyEvent.VK_F11) {
 			Toolkit.getDefaultToolkit().beep();
 			try {
 
 				System.out.println("pressed");
 				ImageIO.write(saveImage, "png", new File("./images/pic" + System.currentTimeMillis() + ".png"));
+//				try {
+//					if (printsmall)
+//						Printer.print(saveImage);
+//
+//					else {
+//						PrinterTest.print(saveImage);
+//						PrinterTest.printMakerspace();
+//					}
+//
+//				} catch (PrintException e1) {
+//					e1.printStackTrace();
+//				}
 				try {
-					if (printsmall)
-						Printer.print(saveImage);
-
-					else {
-						PrinterTest.print(saveImage);
-						PrinterTest.printMakerspace();
-					}
-
+					PrinterTSP.print(saveImage);
 				} catch (PrintException e1) {
+					// TODO Auto-generated catch block
 					e1.printStackTrace();
 				}
 
