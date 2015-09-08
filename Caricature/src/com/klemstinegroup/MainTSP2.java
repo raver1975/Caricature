@@ -10,8 +10,15 @@ import static com.googlecode.javacv.cpp.opencv_core.cvPoint;
 import static com.googlecode.javacv.cpp.opencv_core.cvRectangle;
 import static com.googlecode.javacv.cpp.opencv_core.cvResetImageROI;
 import static com.googlecode.javacv.cpp.opencv_core.cvSetImageROI;
+import static com.googlecode.javacv.cpp.opencv_core.cvZero;
 import static com.googlecode.javacv.cpp.opencv_imgproc.CV_BGR2GRAY;
+import static com.googlecode.javacv.cpp.opencv_imgproc.CV_BILATERAL;
+import static com.googlecode.javacv.cpp.opencv_imgproc.CV_MEDIAN;
+import static com.googlecode.javacv.cpp.opencv_imgproc.CV_THRESH_BINARY_INV;
 import static com.googlecode.javacv.cpp.opencv_imgproc.cvCvtColor;
+import static com.googlecode.javacv.cpp.opencv_imgproc.cvLaplace;
+import static com.googlecode.javacv.cpp.opencv_imgproc.cvSmooth;
+import static com.googlecode.javacv.cpp.opencv_imgproc.cvThreshold;
 import static com.googlecode.javacv.cpp.opencv_objdetect.CV_HAAR_DO_CANNY_PRUNING;
 import static com.googlecode.javacv.cpp.opencv_objdetect.cvHaarDetectObjects;
 
@@ -46,9 +53,12 @@ import com.googlecode.javacv.cpp.opencv_core.CvSeq;
 import com.googlecode.javacv.cpp.opencv_core.IplImage;
 import com.googlecode.javacv.cpp.opencv_objdetect.CvHaarClassifierCascade;
 import com.jhlabs.image.AbstractBufferedImageOp;
+import com.jhlabs.image.GrayscaleFilter;
+import com.jhlabs.image.LaplaceFilter;
 import com.jhlabs.image.PosterizeFilter;
+import com.jhlabs.image.SwimFilter;
 
-public class MainTSP implements KeyListener, Printable {
+public class MainTSP2 implements KeyListener, Printable {
 	public static final String FACE_XML_FILE = "haarcascade_frontalface_alt.xml";
 	public static final String NOSE_XML_FILE = "nose.xml";
 	public static int stretchX = 40;
@@ -62,7 +72,7 @@ public class MainTSP implements KeyListener, Printable {
 	CanvasFrame cf2 = new CanvasFrame("Caricature2");
 	int x1, y1, x2, y2;
 	private boolean mustdetect;
-	static boolean mustacheOn = true;
+	static boolean mustacheOn = false;
 	int posterizelevels = 5;
 	private BufferedImage saveImage;
 	//
@@ -70,13 +80,30 @@ public class MainTSP implements KeyListener, Printable {
 	private boolean printsmall = true;
 	int maxwidth = printsmall ? 187 : 384; // 187,384
 
-	public MainTSP() throws Exception {
+	int EDGES_THRESHOLD = 70;
+	int LAPLACIAN_FILTER_SIZE = 5;
+	int MEDIAN_BLUR_FILTER_SIZE = 7;
+	int repetitions = 7; // Repetitions for strong cartoon effect.
+	int ksize = 1; // Filter size. Has a large effect on speed.
+	double sigmaColor = 9; // Filter color strength.
+	double sigmaSpace = 7; // Spatial strength. Affects speed.
+	int NUM_COLORS = 16;
+	int gg = (256 / NUM_COLORS);
+	private float t1;
+	private float t2;
+
+	SwimFilter sf = new SwimFilter();
+	SwimFilter sf1 = new SwimFilter();
+	LaplaceFilter lf = new LaplaceFilter();
+	GrayscaleFilter gf = new GrayscaleFilter();
+	//PosterizeFilter glf = new PosterizeFilter();
+
+	public MainTSP2() throws Exception {
 		new Thread(new Runnable() {
 			public void run() {
 				try {
 					start();
 				} catch (Exception e) {
-					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
 			}
@@ -84,28 +111,15 @@ public class MainTSP implements KeyListener, Printable {
 	}
 
 	public void start() throws Exception {
-		// PageFormat format = new PageFormat();
-		// Paper paper = new Paper();
-		//
-		// double paperWidth = 2.25;// 3.25
-		// double paperHeight = 2.25;// 11.69
-		// double leftMargin = 0.12;
-		// double rightMargin = 0.10;
-		// double topMargin = 0;
-		// double bottomMargin = 0.01;
-		// paper.setSize(paperWidth * 72, paperHeight * 72);
-		// paper.setImageableArea(leftMargin * 72, topMargin * 72, (paperWidth -
-		// leftMargin - rightMargin) * 72, (paperHeight - topMargin -
-		// bottomMargin) * 72);
-		//
-		// format.setPaper(paper);
-		// format.setOrientation(PageFormat.LANDSCAPE);
-		// job.setPrintable(this,format);
-		// job.printDialog();
-		// KeyboardFocusManager manager =
-		// KeyboardFocusManager.getCurrentKeyboardFocusManager();
-		// manager.addKeyEventDispatcher(new MyDispatcher());
-
+		sf.setAmount(20f);
+		sf.setTurbulence(1f);
+		sf.setEdgeAction(sf.CLAMP);
+		sf1.setEdgeAction(sf1.CLAMP);
+		sf1.setAmount(30f);
+		sf1.setTurbulence(1f);
+		sf1.setScale(300);
+		sf1.setStretch(50);
+		//glf.setNumLevels(2);
 		cf.getCanvas().addKeyListener(this);
 		cf1.getCanvas().addKeyListener(this);
 		cf2.getCanvas().addKeyListener(this);
@@ -123,10 +137,6 @@ public class MainTSP implements KeyListener, Printable {
 			e.printStackTrace();
 		}
 		OpenCVFrameGrabber grabber = new OpenCVFrameGrabber(0);
-		//grabber.setImageWidth(1600);
-		//grabber.setImageHeight(1200);
-		// grabber.setImageWidth(1280);
-		// grabber.setImageHeight(1024);
 		grabber.start();
 
 		cf.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -137,17 +147,28 @@ public class MainTSP implements KeyListener, Printable {
 		CvHaarClassifierCascade face_cascade = new CvHaarClassifierCascade(cvLoad(FACE_XML_FILE));
 		CvHaarClassifierCascade nose_cascade = new CvHaarClassifierCascade(cvLoad(NOSE_XML_FILE));
 		CvRect r = new CvRect(image.width() / 2 - 200, image.height() / 2 - 200, 400, 400);
+		IplImage gray = IplImage.create(image.cvSize(), IPL_DEPTH_8U, 1);
+		cvCvtColor(image, gray, CV_BGR2GRAY);
+		IplImage edges = IplImage.create(gray.cvSize(), gray.depth(), gray.nChannels());
+		IplImage temp12 = IplImage.create(image.cvSize(), image.depth(), image.nChannels());
 		while (cf.isVisible()) {
 			image = grabber.grab();
+
+			if (mustacheOn && mustdetect) {
+				BufferedImage combined = image.getBufferedImage();
+				Graphics g = combined.getGraphics();
+				g.drawImage(resizeImage(mustache, x1, y1), x2, y2, null);
+				image.release();
+				image = IplImage.createFrom(combined);
+				mustdetect = false;
+			}
+
 			CvMemStorage storage = CvMemStorage.create();
 			CvSeq sign = cvHaarDetectObjects(image, face_cascade, storage, 1.5, 3, CV_HAAR_DO_CANNY_PRUNING);
 
 			int total_Faces = sign.total();
 			if (total_Faces > 0) {
 				CvRect r2 = new CvRect(cvGetSeqElem(sign, 0));
-				// cvRectangle(image, cvPoint(r2.x(), r2.y()),
-				// cvPoint(r2.width() + r2.x(), r2.height() + r2.y()),
-				// CvScalar.BLUE, 2, CV_AA, 0);
 				int maxw = r2.x() + r2.width();
 				int maxh = r2.y() + r2.height();
 				// detect nose
@@ -155,37 +176,26 @@ public class MainTSP implements KeyListener, Printable {
 				IplImage face = copy(image);
 				cvResetImageROI(image);
 				CvMemStorage storage1 = CvMemStorage.create();
-				CvSeq sign1 = cvHaarDetectObjects(face, nose_cascade, storage1, 1.15, 3, com.googlecode.javacv.cpp.opencv_objdetect.CV_HAAR_SCALE_IMAGE | com.googlecode.javacv.cpp.opencv_objdetect.CV_HAAR_DO_CANNY_PRUNING | com.googlecode.javacv.cpp.opencv_objdetect.CV_HAAR_FIND_BIGGEST_OBJECT);
+				CvSeq sign1 = cvHaarDetectObjects(face, nose_cascade, storage1, 1.15, 3,
+						com.googlecode.javacv.cpp.opencv_objdetect.CV_HAAR_SCALE_IMAGE
+								| com.googlecode.javacv.cpp.opencv_objdetect.CV_HAAR_DO_CANNY_PRUNING
+								| com.googlecode.javacv.cpp.opencv_objdetect.CV_HAAR_FIND_BIGGEST_OBJECT);
 
 				face.release();
 				int total_mouth = sign1.total();
 				if (total_mouth > 0) {
 					CvRect r3 = new CvRect(cvGetSeqElem(sign1, 0));
-					// cvRectangle(
-					// image,
-					// cvPoint(r3.x() + r2.x(), r3.y() + r2.y()),
-					// cvPoint(r3.width() / 2 + r2.x() + r3.x(),
-					// r3.height() + r2.y() + r3.y()),
-					// CvScalar.YELLOW, 2, CV_AA, 0);
-
-					// paint both images, preserving the alpha channels
-
 					x1 = (int) ((float) r3.width() * size);
 					y1 = r3.height();
 					x2 = r3.x() + r2.x() - ((int) ((float) r3.width() / 1f)) + 5;
 					y2 = r3.y() + r2.y() + r3.height() / 2 + 5;
 					mustdetect = true;
-
 				}
 
 				cvClearMemStorage(storage1);
 
 				for (int i = 0; i < total_Faces; i++) {
 					CvRect r1 = new CvRect(cvGetSeqElem(sign, i));
-					// cvRectangle(image, cvPoint(r1.x(), r1.y()),
-					// cvPoint(r1.width() + r1.x(), r1.height() + r1.y()),
-					// CvScalar.BLUE, 2, CV_AA, 0);
-
 					r2.x(Math.min(r2.x(), r1.x()));
 					r2.y(Math.min(r2.y(), r1.y()));
 					if (r1.x() + r1.width() > maxw)
@@ -194,7 +204,6 @@ public class MainTSP implements KeyListener, Printable {
 						maxh = r1.y() + r1.height();
 					r2.width(maxw - r2.x());
 					r2.height(maxh - r2.y());
-
 				}
 				r.x(r.x() + (r2.x() - stretchX - r.x()) / 5);
 				r.y(r.y() + (r2.y() - 2 * stretchY - r.y()) / 5);
@@ -202,10 +211,10 @@ public class MainTSP implements KeyListener, Printable {
 				r.height(r.height() + (r2.height() + 3 * stretchY - r.height()) / 5);
 
 			} else {
-				r.x(r.x() - 5);
-				r.y(r.y() - 5);
-				r.width(r.width() + 10);
-				r.height(r.height() + 10);
+				r.x(r.x() - 3);
+				r.y(r.y() - 3);
+				r.width(r.width() + 5);
+				r.height(r.height() + 5);
 			}
 			if (r.x() < 0)
 				r.x(0);
@@ -218,50 +227,55 @@ public class MainTSP implements KeyListener, Printable {
 
 			cvClearMemStorage(storage);
 
-			cvSetImageROI(image, r);
-			IplImage copy = copy(image);
-			cvResetImageROI(image);
-			cf1.showImage(copy);
-
-			if (mustacheOn && mustdetect) {
-				BufferedImage combined = image.getBufferedImage();
-				Graphics g = combined.getGraphics();
-				g.drawImage(resizeImage(mustache, x1, y1), x2, y2, null);
-				image.release();
-				image = IplImage.createFrom(combined);
-				mustdetect = false;
-				cvSetImageROI(image, r);
-				copy.release();
-				copy = copy(image);
-				cvResetImageROI(image);
-				// cf1.showImage(copy);
+			// ---------------------------------------------------------------
+			IplImage copy11 = copy(image);
+			copy11 = render(render(copy11, sf), sf1);
+			cvCvtColor(copy11, gray, CV_BGR2GRAY);
+			cvSmooth(gray, gray, CV_MEDIAN, MEDIAN_BLUR_FILTER_SIZE, 0, 0, 0);
+			cvLaplace(gray, edges, LAPLACIAN_FILTER_SIZE);
+			cvThreshold(edges, edges, 80, 255, CV_THRESH_BINARY_INV);
+			temp12 = IplImage.create(copy11.cvSize(), copy11.depth(), copy11.nChannels());
+			for (int i = 0; i < repetitions; i++) {
+				cvSmooth(copy11, temp12, CV_BILATERAL, ksize, 0, sigmaColor, sigmaSpace);
+				cvSmooth(temp12, copy11, CV_BILATERAL, ksize, 0, sigmaColor, sigmaSpace);
 			}
-			// equalize
-			// copy = IplImage.createFrom(HistogramEQ.histogramEqualization(copy
-			// .getBufferedImage(1f, false)));
-			// try {
-			// copy =
-			// IplImage.createFrom(HistogramEqualization.HistogramEqualization(copy
-			// .getBufferedImage(1f, false)));
-			// } catch (IOException e) {
-			// // TODO Auto-generated catch block
-			// e.printStackTrace();
-			// }
+
+			temp12 = IplImage.create(copy11.cvSize(), copy11.depth(), copy11.nChannels());
+			cvZero(temp12);
+
+			cvCopy(copy11, temp12, edges);
+			sf.setTime(t1 += .02f);
+			sf1.setTime(t2 += .02f);
+
+			//IplImage b = render(temp12, glf);
+			//cvSetImageROI(temp12, r);
+			//IplImage copy66 = copy(temp12);
+			//cvResetImageROI(temp12);
+			// b.release();
+			cf1.showImage(temp12);
+			// -----------------------------------------------------------------------------------------------------
+			// cf1.showImage(copy);
+			IplImage copy = copy(temp12);
+			cvResetImageROI(temp12);
+			cvSetImageROI(temp12, r);
+			copy.release();
+			copy = copy(temp12);
+			cvResetImageROI(temp12);
+
 			int newheight = (int) ((maxwidth / (double) copy.width()) * copy.height());
-			copy = IplImage.createFrom(resizeImage(AutoCorrectionFilter.filter(copy.getBufferedImage()), maxwidth, newheight));
-			IplImage gray = IplImage.create(copy.cvSize(), IPL_DEPTH_8U, 1);
-			cvCvtColor(copy, gray, CV_BGR2GRAY);
-			gray = render(gray, pf);
+			copy = IplImage
+					.createFrom(resizeImage(AutoCorrectionFilter.filter(copy.getBufferedImage()), maxwidth, newheight));
+			IplImage gray3 = IplImage.create(copy.cvSize(), IPL_DEPTH_8U, 1);
+			cvCvtColor(copy, gray3, CV_BGR2GRAY);
+			gray3 = render(gray3, pf);
 
-			cvRectangle(image, cvPoint(r.x(), r.y()), cvPoint(r.width() + r.x(), r.height() + r.y()), CvScalar.RED, 2, CV_AA, 0);
+			cvRectangle(image, cvPoint(r.x(), r.y()), cvPoint(r.width() + r.x(), r.height() + r.y()), CvScalar.RED, 2,
+					CV_AA, 0);
 			cf2.showImage(image);
-
-			// cvThreshold(gray, gray, EDGES_THRESHOLD, 255, CV_THRESH_BINARY);
-//			saveImage = floydSteinbergDithering(gray.getBufferedImage());
-			saveImage = gray.getBufferedImage();
+			saveImage = gray3.getBufferedImage();
 			cf.showImage(saveImage);
 			copy.release();
-			gray.release();
+			gray3.release();
 			image.release();
 			System.gc();
 		}
@@ -273,7 +287,6 @@ public class MainTSP implements KeyListener, Printable {
 		for (int y = 0; y < image.getHeight(); y++) {
 			raster.getPixels(0, y, image.getWidth(), 1, pixels);
 			for (int i = 0; i < pixels.length; i += 4) {
-				// System.out.println(pixels[i+3]+" ");
 				if (pixels[i + 3] < 40) {
 					pixels[i] = 0;
 					pixels[i + 1] = 0;
@@ -293,7 +306,7 @@ public class MainTSP implements KeyListener, Printable {
 	}
 
 	public static void main(String[] args) throws Exception {
-		new MainTSP();
+		new MainTSP2();
 	}
 
 	public static IplImage copy(IplImage image) {
@@ -327,54 +340,6 @@ public class MainTSP implements KeyListener, Printable {
 		g.drawImage(image, 0, 0, width, height, null);
 		g.dispose();
 		return resizedImage;
-	}
-
-	private static C3 findClosestPaletteColor(C3 c, C3[] palette) {
-		C3 closest = palette[0];
-
-		for (C3 n : palette)
-			if (n.diff(c) < closest.diff(c))
-				closest = n;
-
-		return closest;
-	}
-
-	private static BufferedImage floydSteinbergDithering(BufferedImage img) {
-		// BufferedImage img=new BufferedImage(imag.getWidth(),imag.getHeight(),
-		// BufferedImage.TYPE_INT_GRAY);
-		// img.getGraphics().drawImage(imag,0,0,null);
-		C3[] palette = new C3[] { new C3(0, 0, 0), new C3(255, 255, 255) };
-
-		int w = img.getWidth();
-		int h = img.getHeight();
-
-		C3[][] d = new C3[h][w];
-
-		for (int y = 0; y < h; y++)
-			for (int x = 0; x < w; x++)
-				d[y][x] = new C3(img.getRGB(x, y));
-
-		for (int y = 0; y < img.getHeight(); y++) {
-			for (int x = 0; x < img.getWidth(); x++) {
-
-				C3 oldColor = d[y][x];
-				C3 newColor = findClosestPaletteColor(oldColor, palette);
-				img.setRGB(x, y, newColor.toColor().getRGB());
-
-				C3 err = oldColor.sub(newColor);
-
-				if (x + 1 < w)
-					d[y][x + 1] = d[y][x + 1].add(err.mul(7. / 16));
-				if (x - 1 >= 0 && y + 1 < h)
-					d[y + 1][x - 1] = d[y + 1][x - 1].add(err.mul(3. / 16));
-				if (y + 1 < h)
-					d[y + 1][x] = d[y + 1][x].add(err.mul(5. / 16));
-				if (x + 1 < w && y + 1 < h)
-					d[y + 1][x + 1] = d[y + 1][x + 1].add(err.mul(1. / 16));
-			}
-		}
-
-		return img;
 	}
 
 	static class C3 {
@@ -434,29 +399,16 @@ public class MainTSP implements KeyListener, Printable {
 	@Override
 	public void keyPressed(KeyEvent e) {
 		if (e.getKeyCode() == KeyEvent.VK_M)
-			MainTSP.mustacheOn = !MainTSP.mustacheOn;
+			MainTSP2.mustacheOn = !MainTSP2.mustacheOn;
 		if (e.getKeyCode() == KeyEvent.VK_F11) {
 			Toolkit.getDefaultToolkit().beep();
 			try {
 
 				System.out.println("pressed");
 				ImageIO.write(saveImage, "png", new File("./images/pic" + System.currentTimeMillis() + ".png"));
-//				try {
-//					if (printsmall)
-//						Printer.print(saveImage);
-//
-//					else {
-//						PrinterTest.print(saveImage);
-//						PrinterTest.printMakerspace();
-//					}
-//
-//				} catch (PrintException e1) {
-//					e1.printStackTrace();
-//				}
 				try {
 					PrinterTSP.print(saveImage);
 				} catch (PrintException e1) {
-					// TODO Auto-generated catch block
 					e1.printStackTrace();
 				}
 
@@ -476,18 +428,6 @@ public class MainTSP implements KeyListener, Printable {
 		if (page > 0) {
 			return NO_SUCH_PAGE;
 		}
-
-		// paramPageFormat.setOrientation(PageFormat.LANDSCAPE);
-		// Paper pPaper = paramPageFormat.getPaper();
-		// pPaper.setSize(164.592,164.592);
-		// pPaper.setImageableArea(10, 10, pPaper.getWidth()-20,
-		// pPaper.getHeight()-20);
-		// paramPageFormat.setPaper(pPaper);
-		// System.out.println(pPaper.getWidth()+","+pPaper.getHeight());
-		// System.out.println(pPaper.getImageableWidth()+","+pPaper.getImageableHeight());
-		// System.out.println(pPaper.getImageableX()+","+pPaper.getImageableY());
-		// System.out.println(saveImage.getWidth()+","+saveImage.getHeight());
-		//
 		Graphics2D g2d = (Graphics2D) paramGraphics;
 		AffineTransform pOrigTransform = g2d.getTransform();
 		g2d.translate(paramPageFormat.getImageableX(), paramPageFormat.getImageableY());
