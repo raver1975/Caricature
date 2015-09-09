@@ -1,6 +1,8 @@
 package com.klemstinegroup;
 
-import static com.googlecode.javacv.cpp.opencv_core.CV_AA;
+import static com.googlecode.javacv.cpp.opencv_core.*;
+import static com.googlecode.javacv.cpp.opencv_imgproc.*;
+import static com.googlecode.javacv.cpp.opencv_imgproc.cvErode;
 import static com.googlecode.javacv.cpp.opencv_core.IPL_DEPTH_8U;
 import static com.googlecode.javacv.cpp.opencv_core.cvClearMemStorage;
 import static com.googlecode.javacv.cpp.opencv_core.cvCopy;
@@ -11,7 +13,11 @@ import static com.googlecode.javacv.cpp.opencv_core.cvRectangle;
 import static com.googlecode.javacv.cpp.opencv_core.cvResetImageROI;
 import static com.googlecode.javacv.cpp.opencv_core.cvSetImageROI;
 import static com.googlecode.javacv.cpp.opencv_core.cvZero;
-import static com.googlecode.javacv.cpp.opencv_imgproc.CV_BGR2GRAY;
+import static com.googlecode.javacv.cpp.cvkernels.*;
+import static com.googlecode.javacv.cpp.opencv_calib3d.*;
+import static com.googlecode.javacv.cpp.opencv_core.*;
+import static com.googlecode.javacv.cpp.opencv_imgproc.*;
+
 import static com.googlecode.javacv.cpp.opencv_imgproc.CV_BILATERAL;
 import static com.googlecode.javacv.cpp.opencv_imgproc.CV_MEDIAN;
 import static com.googlecode.javacv.cpp.opencv_imgproc.CV_THRESH_BINARY_INV;
@@ -32,7 +38,6 @@ import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.awt.image.WritableRaster;
 import java.awt.print.PageFormat;
-import java.awt.print.Paper;
 import java.awt.print.Printable;
 import java.awt.print.PrinterException;
 import java.awt.print.PrinterJob;
@@ -43,26 +48,30 @@ import javax.imageio.ImageIO;
 import javax.print.PrintException;
 import javax.swing.JFrame;
 
-import com.googlecode.javacv.CanvasFrame;
+import com.googlecode.javacpp.Loader;
+import com.googlecode.javacv.*;
 import com.googlecode.javacv.FrameGrabber.Exception;
 import com.googlecode.javacv.OpenCVFrameGrabber;
+import com.googlecode.javacv.cpp.opencv_core.*;
 import com.googlecode.javacv.cpp.opencv_core.CvMemStorage;
 import com.googlecode.javacv.cpp.opencv_core.CvRect;
 import com.googlecode.javacv.cpp.opencv_core.CvScalar;
 import com.googlecode.javacv.cpp.opencv_core.CvSeq;
 import com.googlecode.javacv.cpp.opencv_core.IplImage;
 import com.googlecode.javacv.cpp.opencv_objdetect.CvHaarClassifierCascade;
+import com.googlecode.javacv.cpp.opencv_video.*;
+import com.googlecode.javacv.cpp.opencv_imgproc.*;
 import com.jhlabs.image.AbstractBufferedImageOp;
 import com.jhlabs.image.GrayscaleFilter;
 import com.jhlabs.image.LaplaceFilter;
 import com.jhlabs.image.PosterizeFilter;
 import com.jhlabs.image.SwimFilter;
 
-public class MainTSP2 implements KeyListener, Printable {
+public class MainTSP3 implements KeyListener, Printable {
 	public static final String FACE_XML_FILE = "haarcascade_frontalface_alt.xml";
 	public static final String NOSE_XML_FILE = "nose.xml";
-	public static int stretchX = 40;
-	public static int stretchY = 40;
+	public static int stretchX = 20;
+	public static int stretchY = 30;
 	float size = 3.f;
 	PosterizeFilter pf = new PosterizeFilter();
 	static int randmust = 0;
@@ -70,15 +79,17 @@ public class MainTSP2 implements KeyListener, Printable {
 	CanvasFrame cf = new CanvasFrame("Caricature");
 	CanvasFrame cf1 = new CanvasFrame("Caricature1");
 	CanvasFrame cf2 = new CanvasFrame("Caricature2");
+	CanvasFrame cf3 = new CanvasFrame("Caricature3");
+
 	int x1, y1, x2, y2;
 	private boolean mustdetect;
 	static boolean mustacheOn = false;
 	int posterizelevels = 5;
 	private BufferedImage saveImage;
-	//
+	BackgroundSubtractorMOG2 mog = new BackgroundSubtractorMOG2(30, 16, false);
+
 	PrinterJob job = PrinterJob.getPrinterJob();
-	private boolean printsmall = true;
-	int maxwidth = printsmall ? 187 : 384; // 187,384
+	int maxwidth = 187;
 
 	int EDGES_THRESHOLD = 70;
 	int LAPLACIAN_FILTER_SIZE = 5;
@@ -96,9 +107,9 @@ public class MainTSP2 implements KeyListener, Printable {
 	SwimFilter sf1 = new SwimFilter();
 	LaplaceFilter lf = new LaplaceFilter();
 	GrayscaleFilter gf = new GrayscaleFilter();
-	//PosterizeFilter glf = new PosterizeFilter();
+	// PosterizeFilter glf = new PosterizeFilter();
 
-	public MainTSP2() throws Exception {
+	public MainTSP3() throws Exception {
 		new Thread(new Runnable() {
 			public void run() {
 				try {
@@ -118,14 +129,18 @@ public class MainTSP2 implements KeyListener, Printable {
 		sf1.setAmount(30f);
 		sf1.setTurbulence(1f);
 		sf1.setScale(300);
-		sf1.setStretch(50);
-		//glf.setNumLevels(2);
+		sf1.setStretch(40);
+		// glf.setNumLevels(2);
 		cf.getCanvas().addKeyListener(this);
 		cf1.getCanvas().addKeyListener(this);
 		cf2.getCanvas().addKeyListener(this);
 		cf.getCanvas().setFocusable(true);
 		cf1.getCanvas().setFocusable(true);
 		cf2.getCanvas().setFocusable(true);
+		cf.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		cf1.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		cf2.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		cf3.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		pf.setNumLevels(posterizelevels);
 		File f = new File("images");
 		if (!f.exists())
@@ -151,9 +166,45 @@ public class MainTSP2 implements KeyListener, Printable {
 		cvCvtColor(image, gray, CV_BGR2GRAY);
 		IplImage edges = IplImage.create(gray.cvSize(), gray.depth(), gray.nChannels());
 		IplImage temp12 = IplImage.create(image.cvSize(), image.depth(), image.nChannels());
+
+		IplImage foreground = IplImage.create(image.cvSize(), IPL_DEPTH_8U, 1);
+		IplImage white = IplImage.create(image.cvSize(), image.depth(), image.nChannels());
+		cvZero(white);
+		cvNot(white, white);
+
+		for (int i = 0; i < 100; i++) {
+			System.out.println(i);
+			image = grabber.grab();
+			mog.apply(copy(image), foreground, -1);
+			cf3.showImage(foreground);
+		}
+
 		while (cf.isVisible()) {
 			image = grabber.grab();
+			// ---------------------------------------------------------------
+			mog.apply(copy(image), foreground, .00001);
 
+			cvErode(foreground, foreground, null, 4);
+			cvDilate(foreground, foreground, null, 4);
+			cvSmooth(foreground, foreground, CV_MEDIAN, 3, 3, 2, 2);
+
+			CvMemStorage storage2 = CvMemStorage.create();
+			CvSeq contour = new CvSeq(null);
+			cvFindContours(foreground, storage2, contour, Loader.sizeof(CvContour.class), CV_RETR_EXTERNAL,
+					CV_CHAIN_APPROX_NONE);
+			while (contour != null && !contour.isNull()) {
+				if (contour.elem_size() > 0) {
+					cvDrawContours(foreground, contour, CvScalar.WHITE, CvScalar.WHITE, -1, CV_FILLED, CV_AA);
+				}
+				contour = contour.h_next();
+			}
+
+			IplImage temp15 = IplImage.create(image.cvSize(), image.depth(), image.nChannels());
+			cvAnd(white, image, temp15, foreground);
+
+			storage2.release();
+			cf3.showImage(temp15);
+			// ---------------------------------------------------------------
 			if (mustacheOn && mustdetect) {
 				BufferedImage combined = image.getBufferedImage();
 				Graphics g = combined.getGraphics();
@@ -247,10 +298,10 @@ public class MainTSP2 implements KeyListener, Printable {
 			sf.setTime(t1 += .02f);
 			sf1.setTime(t2 += .02f);
 
-			//IplImage b = render(temp12, glf);
-			//cvSetImageROI(temp12, r);
-			//IplImage copy66 = copy(temp12);
-			//cvResetImageROI(temp12);
+			// IplImage b = render(temp12, glf);
+			// cvSetImageROI(temp12, r);
+			// IplImage copy66 = copy(temp12);
+			// cvResetImageROI(temp12);
 			// b.release();
 			cf1.showImage(temp12);
 			// -----------------------------------------------------------------------------------------------------
@@ -306,7 +357,7 @@ public class MainTSP2 implements KeyListener, Printable {
 	}
 
 	public static void main(String[] args) throws Exception {
-		new MainTSP2();
+		new MainTSP3();
 	}
 
 	public static IplImage copy(IplImage image) {
@@ -399,7 +450,7 @@ public class MainTSP2 implements KeyListener, Printable {
 	@Override
 	public void keyPressed(KeyEvent e) {
 		if (e.getKeyCode() == KeyEvent.VK_M)
-			MainTSP2.mustacheOn = !MainTSP2.mustacheOn;
+			MainTSP3.mustacheOn = !MainTSP3.mustacheOn;
 		if (e.getKeyCode() == KeyEvent.VK_F11) {
 			Toolkit.getDefaultToolkit().beep();
 			try {
