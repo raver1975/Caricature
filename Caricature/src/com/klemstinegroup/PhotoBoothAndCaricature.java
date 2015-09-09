@@ -1,28 +1,21 @@
 package com.klemstinegroup;
 
 import static com.googlecode.javacv.cpp.opencv_core.CV_AA;
-import com.googlecode.javacpp.*;
-import com.googlecode.javacv.*;
-import com.googlecode.javacv.cpp.opencv_core.*;
-
-import static com.googlecode.javacv.cpp.opencv_core.cvCopy;
-import static com.googlecode.javacv.cpp.opencv_core.*;
-import static com.googlecode.javacv.cpp.opencv_highgui.*;
-import static com.googlecode.javacv.cpp.opencv_features2d.*;
-import static com.googlecode.javacv.cpp.opencv_imgproc.*;
-import static com.googlecode.javacv.cpp.opencv_video.*;
-import static com.googlecode.javacv.cpp.opencv_calib3d.*;
-import static com.googlecode.javacv.cpp.opencv_objdetect.*;
 import static com.googlecode.javacv.cpp.opencv_core.IPL_DEPTH_8U;
 import static com.googlecode.javacv.cpp.opencv_core.cvClearMemStorage;
+import static com.googlecode.javacv.cpp.opencv_core.cvConvertScale;
+import static com.googlecode.javacv.cpp.opencv_core.cvCopy;
 import static com.googlecode.javacv.cpp.opencv_core.cvCopy;
 import static com.googlecode.javacv.cpp.opencv_core.cvGetSeqElem;
+import static com.googlecode.javacv.cpp.opencv_core.cvInitFont;
 import static com.googlecode.javacv.cpp.opencv_core.cvLoad;
 import static com.googlecode.javacv.cpp.opencv_core.cvPoint;
+import static com.googlecode.javacv.cpp.opencv_core.cvPutText;
 import static com.googlecode.javacv.cpp.opencv_core.cvRectangle;
 import static com.googlecode.javacv.cpp.opencv_core.cvResetImageROI;
 import static com.googlecode.javacv.cpp.opencv_core.cvSetImageROI;
 import static com.googlecode.javacv.cpp.opencv_core.cvZero;
+import static com.googlecode.javacv.cpp.opencv_highgui.CV_FONT_NORMAL;
 import static com.googlecode.javacv.cpp.opencv_imgproc.CV_BGR2GRAY;
 import static com.googlecode.javacv.cpp.opencv_imgproc.CV_BILATERAL;
 import static com.googlecode.javacv.cpp.opencv_imgproc.CV_MEDIAN;
@@ -36,6 +29,7 @@ import static com.googlecode.javacv.cpp.opencv_objdetect.cvHaarDetectObjects;
 
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Image;
 import java.awt.Toolkit;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
@@ -51,11 +45,17 @@ import java.io.IOException;
 
 import javax.imageio.ImageIO;
 import javax.print.PrintException;
-import javax.swing.JOptionPane;
 
 import com.googlecode.javacv.CanvasFrame;
 import com.googlecode.javacv.FrameGrabber.Exception;
 import com.googlecode.javacv.OpenCVFrameGrabber;
+import com.googlecode.javacv.cpp.opencv_core.CvFont;
+import com.googlecode.javacv.cpp.opencv_core.CvMemStorage;
+import com.googlecode.javacv.cpp.opencv_core.CvPoint;
+import com.googlecode.javacv.cpp.opencv_core.CvRect;
+import com.googlecode.javacv.cpp.opencv_core.CvScalar;
+import com.googlecode.javacv.cpp.opencv_core.CvSeq;
+import com.googlecode.javacv.cpp.opencv_core.IplImage;
 import com.googlecode.javacv.cpp.opencv_objdetect.CvHaarClassifierCascade;
 import com.jhlabs.image.AbstractBufferedImageOp;
 import com.jhlabs.image.GrayscaleFilter;
@@ -89,9 +89,9 @@ public class PhotoBoothAndCaricature implements KeyListener, Printable {
 	int maxwidth = printsmall ? 187 : 384; // 187,384
 
 	int EDGES_THRESHOLD = 70;
-	int LAPLACIAN_FILTER_SIZE = 5;    //5
-	int MEDIAN_BLUR_FILTER_SIZE =7;  //7
- 	int repetitions = 7; // Repetitions for strong cartoon effect.
+	int LAPLACIAN_FILTER_SIZE = 5; // 5
+	int MEDIAN_BLUR_FILTER_SIZE = 7; // 7
+	int repetitions = 7; // Repetitions for strong cartoon effect.
 	int ksize = 1; // Filter size. Has a large effect on speed.
 	double sigmaColor = 9; // Filter color strength.
 	double sigmaSpace = 7; // Spatial strength. Affects speed.
@@ -169,11 +169,21 @@ public class PhotoBoothAndCaricature implements KeyListener, Printable {
 		if (!f.exists())
 			f.mkdir();
 		BufferedImage mustache = null;
-		try {
-			mustache = thresholdImage(ImageIO.read(new File("mustache.png")), 16);
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
+		
+			try {
+				mustache = thresholdImage(ImageIO.read(new File("mustache.png")), 16);
+
+			} catch (IOException e1) {
+				e1.printStackTrace();
+			}
+		
+		// try {
+		// mustache = thresholdImage(ImageIO.read(new File("mustache.png")),
+		// 16);
+
+		// } catch (IOException e) {
+		// e.printStackTrace();
+		// }
 		OpenCVFrameGrabber grabber = new OpenCVFrameGrabber(0);
 		grabber.start();
 
@@ -307,15 +317,15 @@ public class PhotoBoothAndCaricature implements KeyListener, Printable {
 			IplImage copy1 = IplImage.createFrom((AutoCorrectionFilter.filter(copy.getBufferedImage())));
 			copy = IplImage
 					.createFrom(resizeImage(AutoCorrectionFilter.filter(copy.getBufferedImage()), maxwidth, newheight));
-			
+
 			IplImage gray3 = IplImage.create(copy.cvSize(), IPL_DEPTH_8U, 1);
 			IplImage gray4 = IplImage.create(copy1.cvSize(), IPL_DEPTH_8U, 1);
 			cvCvtColor(copy, gray3, CV_BGR2GRAY);
 			cvCvtColor(copy1, gray4, CV_BGR2GRAY);
 			gray3 = render(gray3, pf);
 			gray4 = render(gray4, pf);
-			System.out.println(gray4.width()+","+gray4.height());
-			System.out.println(copy1.width()+","+copy1.height());
+			System.out.println(gray4.width() + "," + gray4.height());
+			System.out.println(copy1.width() + "," + copy1.height());
 
 			cvRectangle(image, cvPoint(r.x(), r.y()), cvPoint(r.width() + r.x(), r.height() + r.y()), CvScalar.RED, 2,
 					CV_AA, 0);
@@ -445,6 +455,23 @@ public class PhotoBoothAndCaricature implements KeyListener, Printable {
 	@Override
 	public void keyReleased(KeyEvent paramKeyEvent) {
 
+	}
+
+	public static BufferedImage toBufferedImage(Image img) {
+		if (img instanceof BufferedImage) {
+			return (BufferedImage) img;
+		}
+
+		// Create a buffered image with transparency
+		BufferedImage bimage = new BufferedImage(img.getWidth(null), img.getHeight(null), BufferedImage.TYPE_INT_ARGB);
+
+		// Draw the image on to the buffered image
+		Graphics2D bGr = bimage.createGraphics();
+		bGr.drawImage(img, 0, 0, null);
+		bGr.dispose();
+
+		// Return the buffered image
+		return bimage;
 	}
 
 	@Override
