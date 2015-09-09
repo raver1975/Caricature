@@ -90,7 +90,7 @@ public class PhotoBoothAndCaricature implements KeyListener, Printable {
 
 	int EDGES_THRESHOLD = 70;
 	int LAPLACIAN_FILTER_SIZE = 5;    //5
-	int MEDIAN_BLUR_FILTER_SIZE = 7;  //7
+	int MEDIAN_BLUR_FILTER_SIZE =7;  //7
  	int repetitions = 7; // Repetitions for strong cartoon effect.
 	int ksize = 1; // Filter size. Has a large effect on speed.
 	double sigmaColor = 9; // Filter color strength.
